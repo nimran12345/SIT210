@@ -1,0 +1,65 @@
+#include <WiFiNINA.h>
+#include <DHT.h>
+#include <ArduinoHttpClient.h>
+
+// Define sensor pin and type
+#define DHTPIN 2          // DHT22 data pin connected to D2
+#define DHTTYPE DHT11    // ✅ Change to DHT22
+
+DHT dht(DHTPIN, DHTTYPE);
+
+// WiFi credentials (replace with your actual details)
+char ssid[] = "nimran's iphone";         // 👉 Enter your Wi-Fi name
+char pass[] = "nimran1234";     // 👉 Enter your Wi-Fi password
+
+// ThingSpeak server and API key
+const char server[] = "api.thingspeak.com";
+String apiKey = "YOUR_API_KEY_HERE";  // 👉 Replace with your ThingSpeak Write API Key
+
+WiFiClient wifi;
+HttpClient client = HttpClient(wifi, server, 80);
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+
+  // Connect to Wi-Fi
+  while (WiFi.begin(ssid, pass) != WL_CONNECTED) {
+    Serial.println("Connecting to WiFi...");
+    delay(1000);
+  }
+  Serial.println("Connected to WiFi!");
+}
+
+void loop() {
+  float temperature = dht.readTemperature(); // Celsius by default
+  float humidity = dht.readHumidity();
+
+  // Check for valid readings
+  if (isnan(temperature) || isnan(humidity)) {
+    Serial.println("Failed to read from DHT22 sensor!");
+    return;
+  }
+
+  Serial.print("Temperature: ");
+  Serial.print(temperature);
+  Serial.print(" °C\tHumidity: ");
+  Serial.print(humidity);
+  Serial.println(" %");
+
+  // Format POST data
+  String postData = "api_key=" + apiKey +
+                    "&field1=" + String(temperature) +
+                    "&field2=" + String(humidity);
+
+  // Send POST request to ThingSpeak
+  client.beginRequest();
+  client.post("/update");
+  client.sendHeader("Content-Type", "application/x-www-form-urlencoded");
+  client.sendHeader("Content-Length", postData.length());
+  client.beginBody();
+  client.print(postData);
+  client.endRequest();
+
+  delay(30000);  // Wait 30 seconds before next upload
+}
