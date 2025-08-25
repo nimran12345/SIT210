@@ -1,0 +1,162 @@
+#include <WiFiNINA.h>
+#include <PubSubClient.h>
+
+// Network configuration
+const char* NETWORK_SSID = "Galaxy S23 FDD7";
+const char* NETWORK_PASS = "52525252";
+const char* DEVICE_OWNER = "Nimran";
+
+// MQTT configuration
+const char* BROKER_HOST = "broker.hivemq.com";
+const uint16_t BROKER_PORT = 1883;
+const char* TOPIC_WAVE = "SIT210/wave";
+const char* TOPIC_PAT = "SIT210/pat";
+
+WiFiClient networkClient;
+PubSubClient mqttClient(networkClient);
+
+// Hardware configuration
+const int LED = 4;
+const int TRIG = 9;
+const int ECHO = 6;
+
+// Detection parameters
+const float WAVE_DIST = 10.0;
+const float PAT_DIST = 12.0;
+const unsigned long PAT_TIME = 1200;
+const unsigned long MSG_DELAY = 2000;
+
+unsigned long lastMsgTime = 0;
+
+// Distance measurement
+float getDistance() {
+  digitalWrite(TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG, LOW);
+
+  unsigned long echoTime = pulseIn(ECHO, HIGH, 30000);
+  if (echoTime == 0) return -1.0;
+  return echoTime / 58.0;
+}
+
+// LED patterns
+void waveLED() {
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(LED, HIGH); delay(200);
+    digitalWrite(LED, LOW); delay(200);
+  }
+}
+
+void patLED() {
+  for (int i = 0; i < 5; i++) {
+    digitalWrite(LED, HIGH); delay(100);
+    digitalWrite(LED, LOW); delay(100);
+  }
+}
+
+// Handle incoming messages
+void handleMessage(char* topic, byte* payload, unsigned int length) {
+  String messageText;
+  for (unsigned int i = 0; i < length; i++) messageText += (char)payload[i];
+
+  Serial.print("Received: "); Serial.print(topic);
+  Serial.print(" - "); Serial.println(messageText);
+
+  if (String(topic) == TOPIC_WAVE) {
+    waveLED();
+  } else if (String(topic) == TOPIC_PAT) {
+    patLED();
+  }
+}
+
+// Network connection
+void connectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  Serial.print("Connecting to: "); Serial.println(NETWORK_SSID);
+  WiFi.begin(NETWORK_SSID, NETWORK_PASS);
+  
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.print("\nConnected: "); Serial.println(WiFi.localIP());
+}
+
+// MQTT connection
+void connectMQTT() {
+  while (!mqttClient.connected()) {
+    Serial.print("Connecting MQTT...");
+    String clientId = "Arduino-" + String(random(0xFFFF), HEX);
+    
+    if (mqttClient.connect(clientId.c_str())) {
+      Serial.println("connected");
+      mqttClient.subscribe(TOPIC_WAVE);
+      mqttClient.subscribe(TOPIC_PAT);
+    } else {
+      Serial.print("Error: "); Serial.print(mqttClient.state());
+      Serial.println(" - Retrying...");
+      delay(2000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED, OUTPUT);
+  pinMode(TRIG, OUTPUT);
+  pinMode(ECHO, INPUT);
+  randomSeed(analogRead(A0));
+
+  connectWiFi();
+  mqttClient.setServer(BROKER_HOST, BROKER_PORT);
+  mqttClient.setCallback(handleMessage);
+}
+
+void loop() {
+  connectWiFi();
+  connectMQTT();
+  mqttClient.loop();
+
+  static bool detectingPat = false;
+  static unsigned long patStartTime = 0;
+
+  float currentDistance = getDistance();
+  if (currentDistance > 0) {
+    // Pat detection
+    if (currentDistance <= PAT_DIST) {
+      if (!detectingPat) {
+        detectingPat = true;
+        patStartTime = millis();
+      }
+      if (detectingPat && (millis() - patStartTime >= PAT_TIME)) {
+        if (millis() - lastMsgTime >= MSG_DELAY) {
+          String patMsg = String(DEVICE_OWNER) + " detected a pat";
+          mqttClient.publish(TOPIC_PAT, patMsg.c_str());
+          Serial.println("Published pat detection");
+          lastMsgTime = millis();
+        }
+        detectingPat = false;
+      }
+    } else {
+      detectingPat = false;
+    }
+
+    // Wave detection
+    static bool previousState = false;
+    bool currentState = currentDistance <= WAVE_DIST;
+    
+    if (currentState && !previousState) {
+      if (millis() - lastMsgTime >= MSG_DELAY) {
+        String waveMsg = String(DEVICE_OWNER);
+        mqttClient.publish(TOPIC_WAVE, waveMsg.c_str());
+        Serial.println("Published wave detection");
+        lastMsgTime = millis();
+      }
+    }
+    previousState = currentState;
+  }
+
+  delay(50);
+}
