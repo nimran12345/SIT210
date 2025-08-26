@@ -1,0 +1,49 @@
+#define BUTTON_PIN 2     // Push button input
+#define TRIG_PIN 4       // Ultrasonic sensor trigger
+#define ECHO_PIN 3       // Ultrasonic sensor echo (interrupt pin)
+#define LED1_PIN 8       // LED1 (button control)
+#define LED2_PIN 9       // LED2 (ultrasonic sensor control)
+
+volatile bool led1State = LOW;
+volatile bool led2State = LOW;
+
+// ISR for Button
+void handleButton() {
+  led1State = !led1State;
+  digitalWrite(LED1_PIN, led1State);
+  Serial.println("Button pressed → LED1 toggled");
+}
+
+// ISR for Ultrasonic Sensor (Echo)
+void handleUltrasonic() {
+  led2State = !led2State;
+  digitalWrite(LED2_PIN, led2State);
+  Serial.println("Ultrasonic sensor triggered → LED2 toggled");
+}
+
+void setup() {
+  Serial.begin(9600);
+  delay(1000);
+  Serial.println("System ready - waiting for interrupts...");
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(LED1_PIN, OUTPUT);
+  pinMode(LED2_PIN, OUTPUT);
+
+  // Attach interrupts
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), handleButton, FALLING);
+  attachInterrupt(digitalPinToInterrupt(ECHO_PIN), handleUltrasonic, RISING);
+}
+
+void loop() {
+  // Send ultrasonic pulses regularly
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  delay(100); // Adjust based on sensitivity
+}
