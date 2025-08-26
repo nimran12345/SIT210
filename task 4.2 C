@@ -1,0 +1,86 @@
+// --------------------------------------------------------------
+// SIT313 - Task 4.2C (Simulation on Arduino UNO using Tinkercad)
+
+// -------- Global Variables --------
+volatile bool buttonEvent = false;    // Flag set when button interrupt occurs
+volatile bool motionEvent = false;    // Flag set when PIR interrupt occurs
+
+volatile unsigned long lastButtonMs = 0; // For debouncing button
+volatile unsigned long lastMotionMs = 0; // For debouncing PIR
+const unsigned long DEBOUNCE_MS = 50;    // Minimum gap between valid interrupts
+
+// Pin assignments
+const int BUTTON_PIN = 2;   // Button connected to pin D2 (external interrupt pin)
+const int PIR_PIN    = 3;   // PIR OUT connected to pin D3 (external interrupt pin)
+const int LED1_PIN   = 5;   // LED1 toggled by button
+const int LED2_PIN   = 6;   // LED2 toggled by PIR
+
+// LED state trackers
+bool led1State = LOW;
+bool led2State = LOW;
+
+// --------------------------------------------------------------
+// Interrupt Service Routines (ISR)
+// --------------------------------------------------------------
+
+// ISR for button press
+void buttonISR() {
+  unsigned long now = millis(); // Get current time
+  if (now - lastButtonMs > DEBOUNCE_MS) { // Only trigger if outside debounce window
+    buttonEvent = true;       // Mark that button event occurred
+    lastButtonMs = now;       // Save time of this press
+  }
+}
+
+// ISR for PIR motion detection
+void pirISR() {
+  unsigned long now = millis(); // Get current time
+  if (now - lastMotionMs > DEBOUNCE_MS) { // Debounce PIR sensor
+    motionEvent = true;        // Mark that motion event occurred
+    lastMotionMs = now;        // Save time of this trigger
+  }
+}
+
+// --------------------------------------------------------------
+// Setup function (runs once)
+// --------------------------------------------------------------
+void setup() {
+  Serial.begin(9600);   // Start serial monitor for debugging messages
+
+  // Set pin modes
+  pinMode(LED1_PIN, OUTPUT);
+  pinMode(LED2_PIN, OUTPUT);
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);  // Button wired to GND, so use internal pull-up
+  pinMode(PIR_PIN, INPUT);            // PIR OUT as input
+
+  // Attach interrupts:
+  // - Button: triggers on FALLING edge (when pressed)
+  // - PIR: triggers on RISING edge (when motion is detected)
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
+  attachInterrupt(digitalPinToInterrupt(PIR_PIN), pirISR, RISING);
+
+  // Initial message
+  Serial.println("System Ready: Button (D2) toggles LED1, PIR (D3) toggles LED2.");
+}
+
+// --------------------------------------------------------------
+// Loop function (runs repeatedly)
+// --------------------------------------------------------------
+void loop() {
+  // --- Handle button event ---
+  if (buttonEvent) {       // If button interrupt happened
+    buttonEvent = false;   // Clear the flag
+    led1State = !led1State;                // Toggle LED1 state
+    digitalWrite(LED1_PIN, led1State);     // Update LED1
+    Serial.println("Button Interrupt → LED1 toggled");
+  }
+
+  // --- Handle PIR event ---
+  if (motionEvent) {       // If PIR interrupt happened
+    motionEvent = false;   // Clear the flag
+    led2State = !led2State;                // Toggle LED2 state
+    digitalWrite(LED2_PIN, led2State);     // Update LED2
+    Serial.println("PIR Interrupt → LED2 toggled (motion detected)");
+  }
+}
