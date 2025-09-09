@@ -1,0 +1,53 @@
+from tkinter import *
+import tkinter.font
+from gpiozero import LED
+
+# --- Hardware setup (Safe GPIO pins) ---
+led_red = LED(14)
+led_green = LED(15)
+led_blue = LED(17)  # changed from 18 to 17
+
+# --- GUI setup ---
+win = Tk()
+win.title("LED Toggler")
+myFont = tkinter.font.Font(family='Helvetica', size=12, weight='bold')
+
+# --- Function to control LEDs based on radio button ---
+def select_led():
+    choice = led_var.get()
+    # Turn all LEDs off first
+    led_red.off()
+    led_green.off()
+    led_blue.off()
+    
+    # Turn on the selected LED
+    if choice == "Red":
+        led_red.on()
+    elif choice == "Green":
+        led_green.on()
+    elif choice == "Blue":
+        led_blue.on()
+
+# --- Variable for radio buttons ---
+led_var = StringVar()
+led_var.set(None)  # No LED selected initially
+
+# --- Radio buttons ---
+red_radio = Radiobutton(win, text="Red LED", variable=led_var, value="Red",
+                        font=myFont, command=select_led)
+red_radio.grid(row=0, column=0, padx=10, pady=10)
+
+green_radio = Radiobutton(win, text="Green LED", variable=led_var, value="Green",
+                          font=myFont, command=select_led)
+green_radio.grid(row=0, column=1, padx=10, pady=10)
+
+blue_radio = Radiobutton(win, text="Blue LED", variable=led_var, value="Blue",
+                         font=myFont, command=select_led)
+blue_radio.grid(row=0, column=2, padx=10, pady=10)
+
+# --- Exit button ---
+exit_button = Button(win, text="Exit", font=myFont, command=win.destroy)
+exit_button.grid(row=1, column=1, pady=20)
+
+# --- Start GUI ---
+win.mainloop()      explain the code
